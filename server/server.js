@@ -9,16 +9,13 @@ var env = require('node-env-file');
 var http = require('http');
 var request = require('request');
 
-// env(__dirname + '/.env');
-//
-// env(__dirname + '/.env' || process.env);
+env(__dirname + '/.env' || process.env);
 
 var sendgrid  = require('sendgrid')(process.env.SENDGRIDAPIKEY);
 var GITHUB_CLIENT_ID = process.env.GITHUBCLIENTID;
 var GITHUB_CLIENT_SECRET = process.env.GITHUBCLIENTSECRET;
 var TWITTER_CONSUMER_KEY = process.env.TWITTERAPIKEY;
 var TWITTER_CONSUMER_SECRET = process.env.TWITTERSECRET;
-
 var FACEBOOK_APP_ID = process.env.FACEBOOKAPPID;
 var FACEBOOK_APP_SECRET = process.env.FACEBOOKAPPSECRET;
 
@@ -252,47 +249,63 @@ app.post('/api/user', function (req, res, next) {
 ///////////////////////////////
 // get tweets
 ///////////////////////////////
-.get('/tweets/:handle', function (req, res, next) {
-  console.log(req.params);
+
+// here we set up the get handler that will send a request for the users tweet and then send it to our client-side app.
+// route has one param, any user's twitter handle
+.get('/tweets/:handle', function (req, ourResponse, next) {
+  // set options
   var options = {
+    // append the user's handle to the url
     url: 'https://api.twitter.com/1.1/statuses/user_timeline.json?count=1&screen_name=' + req.params.handle,
     method: 'GET',
-    'Accept-Encoding': 'gzip',
     headers: {
-      Authorization: 'Bearer ' + appToken.access_token,
+      // append the access token to the string Bearer with a space.
+      Authorization: 'Bearer ' + twitterAppToken.access_token,
     },
   };
-  request(options, function (err, response, body) {
-    // console.log(errString,'body', body);
-    res.status(200).send(JSON.parse(body)[0]);
+
+  // Send a get request to twitter, notice that the response that we send in the callback is the response from the outer-function passed in through closure.
+  request(options, function (err, responseFromTwitter, body) {
+    ourResponse.status(200).send(JSON.parse(body)[0]);
   });
 });
 
-var appToken;
+//////////////////////////////////////////////////////////////////
+//Set up and send a request for our application-only oAuth token.
+///////////////////////////////////////////////////////////////////
 
+// create a variable to hold our token.
+var twitterAppToken;
+
+// store our twitter key and secret
 var consumerKey = TWITTER_CONSUMER_KEY;
 var consumerSecret = TWITTER_CONSUMER_SECRET;
+
+// concat the key and secret seperated by a colon.
 var bearerTokenCred = consumerKey + ':' + consumerSecret;
-var b = new Buffer(bearerTokenCred);
-var s = b.toString('base64');
+
+// pass the key string into Buffer constructor to create a buffer obj.
+var bufferedToken = new Buffer(bearerTokenCred);
+
+// encode the buffer object in base64
+var encodedAndBufferedToken = bufferedToken.toString('base64');
+
+// set up options, you need quotes around keys with hyphens
 var options = {
   url: 'https://api.twitter.com/oauth2/token',
   body: 'grant_type=client_credentials',
   method: 'POST',
   'Accept-Encoding': 'gzip',
   headers: {
-    Authorization: 'Basic ' + s,
+    Authorization: 'Basic ' + encodedAndBufferedToken,
     'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
   },
 };
-var errString = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-callback = function (err, response, body) {
-  appToken = JSON.parse(body);
-  var tokenBuffer = new Buffer(appToken.access_token);
-  var encodedToken = tokenBuffer.toString('base64');
-};
 
-request(options, callback);
+// request and save an application-only token from twitter
+request(options, function (err, response, body) {
+  twitterAppToken = JSON.parse(body);
+});
 
 //////////////////////////////////////////
 //CRON////////////////////////////////////
